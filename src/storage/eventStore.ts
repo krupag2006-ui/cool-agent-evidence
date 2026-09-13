@@ -20,6 +20,7 @@ class EventStore {
         fs.mkdirSync(config.dataDir, { recursive: true });
       }
 
+      // Check if target events file exists (e.g. /tmp/events.json or data/events.json)
       if (fs.existsSync(config.eventsFilePath)) {
         const raw = fs.readFileSync(config.eventsFilePath, "utf-8");
         if (raw.trim()) {
@@ -28,8 +29,27 @@ class EventStore {
             this.events.set(ev.eventId, ev);
           }
         }
+      } else if (config.seedEventsFilePath && fs.existsSync(config.seedEventsFilePath)) {
+        // Load initial seed events from repository bundled file if target doesn't exist yet
+        const raw = fs.readFileSync(config.seedEventsFilePath, "utf-8");
+        if (raw.trim()) {
+          const list: StoredEvent[] = JSON.parse(raw);
+          for (const ev of list) {
+            this.events.set(ev.eventId, ev);
+          }
+        }
+        // Attempt to copy seed file to writable target
+        try {
+          fs.writeFileSync(config.eventsFilePath, raw, "utf-8");
+        } catch {
+          // Non-fatal if filesystem is restricted
+        }
       } else {
-        fs.writeFileSync(config.eventsFilePath, JSON.stringify([], null, 2), "utf-8");
+        try {
+          fs.writeFileSync(config.eventsFilePath, JSON.stringify([], null, 2), "utf-8");
+        } catch {
+          // Non-fatal in serverless environments
+        }
       }
     } catch (err) {
       console.error("Failed to initialize event store from disk:", err);
@@ -45,7 +65,7 @@ class EventStore {
       fs.writeFileSync(tempPath, JSON.stringify(list, null, 2), "utf-8");
       fs.renameSync(tempPath, config.eventsFilePath);
     } catch (err) {
-      console.error("Failed to persist events to disk:", err);
+      console.warn("Event store persistence notice (memory store active):", err);
     }
   }
 

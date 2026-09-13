@@ -1,5 +1,7 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import fs from "node:fs";
+import path from "node:path";
 import { config } from "./config.js";
 import { healthRouter } from "./routes/health.js";
 import { recordRouter } from "./routes/record.js";
@@ -60,17 +62,34 @@ export function createApp(): Express {
     });
   });
 
-  // Mount API routers
-  app.use("/api/health", healthRouter);
-  app.use("/api/record", recordRouter);
-  app.use("/api/refund", refundRouter);
-  app.use("/api/verify", verifyRouter);
-  // Also mount verify-tampered directly at /api/verify-tampered
-  app.use("/api/verify-tampered", (req, res, next) => {
+  // Unified API router supporting both /api prefix and rewritten paths
+  const apiRouter = express.Router();
+  apiRouter.use("/health", healthRouter);
+  apiRouter.use("/record", recordRouter);
+  apiRouter.use("/refund", refundRouter);
+  apiRouter.use("/verify", verifyRouter);
+  apiRouter.use("/verify-tampered", (req, res, next) => {
     req.url = "/verify-tampered";
     verifyRouter(req, res, next);
   });
-  app.use("/api/events", eventsRouter);
+  apiRouter.use("/events", eventsRouter);
+
+  app.use("/api", apiRouter);
+  app.use(apiRouter);
+
+  // Serve static assets from built frontend if available
+  if (fs.existsSync(config.frontendDistDir)) {
+    app.use(express.static(config.frontendDistDir));
+  }
+
+  // SPA fallback for non-API routes
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const indexPath = path.join(config.frontendDistDir, "index.html");
+    if (req.method === "GET" && !req.path.startsWith("/api") && fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    next();
+  });
 
   // 404 handler
   app.use((req: Request, res: Response) => {

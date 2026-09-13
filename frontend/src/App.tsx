@@ -193,7 +193,6 @@ export function App() {
           <button className={view === "refund" ? "active" : ""} onClick={() => nav("refund")}>New decision</button>
           <button className={view === "lab" || view === "receipt" || view === "verify" ? "active" : ""} onClick={() => nav("lab")}>Evidence lab</button>
         </nav>
-        <div className="service-status"><span className="pulse" /> CooL node <small>LOCAL</small></div>
       </header>
 
       <main className="content">

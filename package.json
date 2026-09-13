@@ -24,6 +24,9 @@
   ],
   "author": "CooL Evidence Team",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "cool-nwc": "^3.0.0",
     "cors": "^2.8.6",
