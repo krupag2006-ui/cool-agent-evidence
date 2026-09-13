@@ -6,7 +6,16 @@
 [![Node](https://img.shields.io/badge/Node-%3E%3D20-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey.svg)](LICENSE)
 
+# CooL Evidence
 
+> Cryptographic evidence for every AI-agent action.
+
+## 🚀 Live Demo
+
+**[Try CooL Evidence →](https://cool-evidence.vercel.app/)**
+
+CooL Evidence is a cryptographic evidence layer for AI agents that
+turns consequential decisions into independently verifiable receipts.
 ## The Problem
 
 Autonomous AI agents increasingly make consequential real-world decisions: approving financial refunds, validating insurance claims, adjusting credit lines, and executing sensitive trades. 
