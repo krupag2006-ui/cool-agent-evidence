@@ -1,0 +1,25 @@
+{
+  "name": "cool-evidence-backend",
+  "version": "1.0.0",
+  "description": "Backend and CooL SDK integration for AI decision evidence recording and verification",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "tsx tests/api.test.ts",
+    "test:cool": "tsx scripts/test-cool.ts",
+    "demo": "tsx scripts/e2e-demo.ts"
+  },
+  "keywords": [
+    "cool",
+    "evidence",
+    "ai-provenance",
+    "transparency-log",
+    "refund-agent"
+  ],
+  "author": "CooL Evidence Team",
+  "license": "Apache-2.0"
+}
+
