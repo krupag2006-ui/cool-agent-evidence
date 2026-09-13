@@ -212,6 +212,18 @@ async function runTests() {
     assert.equal(verifyTamperedBody.checks.signature.status, "fail", "Signature check must FAIL on tampered evidence");
     assert.ok(verifyTamperedBody.reasons.length > 0, "Reasons must detail the failures");
     assert.ok(verifyTamperedBody.formattedVerdict.includes("RESULT      FAILED"));
+
+    // The isolated tampered copy must not invalidate the original receipt.
+    const originalVerifyAfterTamperRes = await fetch(`${baseUrl}/api/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: createdEventId }),
+    });
+    assert.equal(originalVerifyAfterTamperRes.status, 200);
+    const originalVerifyAfterTamperBody = await originalVerifyAfterTamperRes.json();
+    assert.equal(originalVerifyAfterTamperBody.valid, true);
+    assert.equal(originalVerifyAfterTamperBody.checks.binding.status, "pass");
+    assert.equal(originalVerifyAfterTamperBody.checks.signature.status, "pass");
     console.log("  ✔ CooL cryptographic engine detected tampering as expected!");
 
     // -----------------------------------------------------------------
@@ -241,8 +253,102 @@ async function runTests() {
     assert.equal(notFoundRes.status, 404);
     console.log("  ✔ 404 Not Found handled cleanly");
 
+    // -----------------------------------------------------------------
+    // TEST 11: POST /api/refund (approved decision and CooL recording)
+    // -----------------------------------------------------------------
+    console.log("\n▶ TEST 11: POST /api/refund (Approved RefundBot Decision)");
+    const refundRes = await fetch(`${baseUrl}/api/refund`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 5000,
+        reason: "product_damaged",
+        customerId: "CUST-REFUND-1",
+        orderId: "ORD-REFUND-1",
+      }),
+    });
+
+    assert.equal(refundRes.status, 201);
+    const refundBody = await refundRes.json();
+    assert.equal(refundBody.success, true);
+    assert.equal(refundBody.decision.decision, "REFUND_APPROVED");
+    assert.equal(refundBody.decision.agent, "RefundBot");
+    assert.equal(refundBody.eventId.startsWith("EVT-"), true);
+    assert.ok(refundBody.recordId);
+    assert.ok(refundBody.digest.startsWith("mh:sha256:"));
+    assert.equal(refundBody.evidence.schema, "cool.receipt.v2");
+    assert.equal(refundBody.verification.valid, true);
+    assert.equal(refundBody.evidenceStatus.decision, "REFUND_APPROVED");
+    assert.equal(refundBody.evidenceStatus.evidence, "RECORDED");
+    assert.equal(refundBody.evidenceStatus.verification, "VALID");
+    assert.equal(refundBody.evidenceStatus.checks.binding.status, "pass");
+    assert.equal(refundBody.evidenceStatus.checks.signature.status, "pass");
+    const refundEventId = refundBody.eventId;
+    console.log("  ✔ Approved decision recorded with real CooL evidence");
+
+    // -----------------------------------------------------------------
+    // TEST 12: POST /api/refund/:eventId/verify
+    // -----------------------------------------------------------------
+    console.log(`\n▶ TEST 12: POST /api/refund/${refundEventId}/verify`);
+    const refundVerifyRes = await fetch(`${baseUrl}/api/refund/${refundEventId}/verify`, {
+      method: "POST",
+    });
+
+    assert.equal(refundVerifyRes.status, 200);
+    const refundVerifyBody = await refundVerifyRes.json();
+    assert.equal(refundVerifyBody.success, true);
+    assert.equal(refundVerifyBody.decision.decision, "REFUND_APPROVED");
+    assert.equal(refundVerifyBody.eventId, refundEventId);
+    assert.equal(refundVerifyBody.verification.valid, true);
+    assert.equal(refundVerifyBody.verification.checks.binding.status, "pass");
+    assert.equal(refundVerifyBody.verification.checks.signature.status, "pass");
+    assert.equal(refundVerifyBody.evidenceStatus.verification, "VALID");
+    assert.deepEqual(refundVerifyBody.evidenceStatus.checks, refundVerifyBody.verification.checks);
+    console.log("  ✔ RefundBot evidence verified through the existing CooL verifier");
+
+    // -----------------------------------------------------------------
+    // TEST 13: POST /api/refund (rejected decision)
+    // -----------------------------------------------------------------
+    console.log("\n▶ TEST 13: POST /api/refund (Rejected RefundBot Decision)");
+    const rejectedRefundRes = await fetch(`${baseUrl}/api/refund`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 15000,
+        reason: "customer_changed_mind",
+        customerId: "CUST-REFUND-2",
+        orderId: "ORD-REFUND-2",
+      }),
+    });
+
+    assert.equal(rejectedRefundRes.status, 201);
+    const rejectedRefundBody = await rejectedRefundRes.json();
+    assert.equal(rejectedRefundBody.decision.decision, "REFUND_REJECTED");
+    assert.equal(rejectedRefundBody.decision.eventType, "agent.refund_rejected");
+    assert.equal(rejectedRefundBody.evidence.schema, "cool.receipt.v2");
+    assert.equal(rejectedRefundBody.verification.valid, true);
+    assert.equal(rejectedRefundBody.evidenceStatus.decision, "REFUND_REJECTED");
+    assert.equal(rejectedRefundBody.evidenceStatus.verification, "VALID");
+    console.log("  ✔ Rejected decision was recorded deterministically");
+
+    // -----------------------------------------------------------------
+    // TEST 14: POST /api/refund validation failure
+    // -----------------------------------------------------------------
+    console.log("\n▶ TEST 14: POST /api/refund (Validation Error Handling)");
+    const invalidRefundRes = await fetch(`${baseUrl}/api/refund`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: -1, reason: "product_damaged" }),
+    });
+
+    assert.equal(invalidRefundRes.status, 400);
+    const invalidRefundBody = await invalidRefundRes.json();
+    assert.equal(invalidRefundBody.success, false);
+    assert.ok(invalidRefundBody.issues.length >= 2);
+    console.log("  ✔ RefundBot input validation returned 400");
+
     console.log("\n====================================================");
-    console.log("🎉 ALL 10 TESTS PASSED SUCCESSFULLY!");
+    console.log("🎉 ALL 14 TESTS PASSED SUCCESSFULLY!");
     console.log("====================================================");
   } finally {
     server.close();

@@ -31,6 +31,8 @@ export interface StoredEvent {
   decision: string;
   amount: number;
   reason: string;
+  customerId?: string;
+  orderId?: string;
   timestamp: string;
   status: "recorded" | "verified" | "tampered_detected";
 }

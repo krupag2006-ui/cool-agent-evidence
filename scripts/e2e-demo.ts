@@ -20,38 +20,23 @@ async function main() {
   const baseUrl = `http://localhost:${PORT}`;
 
   try {
-    // 1. Health check
-    console.log("\n--- STEP 1: Check /api/health ---");
+    // Preflight only; the numbered flow below is the product story.
+    console.log("\n--- COO L EVIDENCE PREFLIGHT ---");
     const healthRes = await fetch(`${baseUrl}/api/health`);
     const healthJson = await healthRes.json();
     console.log("Health Status:", healthRes.status, healthJson);
 
-    // 2. Create RefundBot event via /api/record
-    console.log("\n--- STEP 2: Post Refund Decision to /api/record ---");
+    // 1. AI agent action
+    console.log("\n--- STEP 1: AI AGENT ACTION ---");
+    console.log("RefundBot receives: INR 5,000 refund | product_damaged");
     const refundPayload = {
-      agent: "RefundBot",
-      agentVersion: "2.1.0",
-      model: "RefundGPT-4o-Mini",
-      policyVersion: "ECommercePolicy-2026-Q3",
-      eventType: "agent.refund_approved",
-      decision: "REFUND_APPROVED",
-      amount: 14999,
-      reason: "Damaged item returned with photo verification",
+      amount: 5000,
+      reason: "product_damaged",
       customerId: "USER_ALICE_4021",
       orderId: "ORDER_ITEM_99341",
-      payloads: {
-        input: {
-          returnTracking: "1Z9999999999999999",
-          inspectionStatus: "CONFIRMED_DAMAGED",
-        },
-        output: {
-          refundReference: "REF_TXN_8884920",
-          paymentMethod: "ORIGINAL_CREDIT_CARD",
-        },
-      },
     };
 
-    const recordRes = await fetch(`${baseUrl}/api/record`, {
+    const recordRes = await fetch(`${baseUrl}/api/refund`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(refundPayload),
@@ -59,6 +44,14 @@ async function main() {
 
     const recordJson = await recordRes.json();
     console.log("Record Status:", recordRes.status);
+
+    // 2. AI decision
+    console.log("\n--- STEP 2: AI DECISION ---");
+    console.log("RefundBot Decision:", recordJson.decision?.decision);
+
+    // 3. CooL evidence
+    console.log("\n--- STEP 3: COO L EVIDENCE ---");
+    console.log("Evidence Status:", recordJson.evidenceStatus?.evidence);
     console.log("Event ID:", recordJson.eventId);
     console.log("CooL Record ID (ULID):", recordJson.recordId);
     console.log("Execution ID:", recordJson.executionId);
@@ -68,9 +61,9 @@ async function main() {
 
     const eventId = recordJson.eventId;
 
-    // 3. Verify event via /api/verify
-    console.log(`\n--- STEP 3: Verify Event ${eventId} via /api/verify ---`);
-    const verifyRes = await fetch(`${baseUrl}/api/verify`, {
+    // 4. Verify original evidence
+    console.log(`\n--- STEP 4: COO L VERIFY ---`);
+    const verifyRes = await fetch(`${baseUrl}/api/refund/${eventId}/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ eventId }),
@@ -78,17 +71,17 @@ async function main() {
 
     const verifyJson = await verifyRes.json();
     console.log("Verify Status:", verifyRes.status);
-    console.log("Valid:", verifyJson.valid);
+    console.log("CooL Verification:", verifyJson.evidenceStatus?.verification);
     console.log("Checks:");
-    console.log("  - Binding:    ", verifyJson.checks.binding.status, `(${verifyJson.checks.binding.detail})`);
-    console.log("  - Signature:  ", verifyJson.checks.signature.status, `(${verifyJson.checks.signature.detail})`);
-    console.log("  - Inclusion:  ", verifyJson.checks.inclusion.status, `(${verifyJson.checks.inclusion.detail})`);
-    console.log("  - Attestation:", verifyJson.checks.attestation.status);
-    console.log("  - Enclave:    ", verifyJson.checks.enclave.status);
-    console.log("Verdict ASCII Block:\n" + verifyJson.formattedVerdict);
+    for (const [name, check] of Object.entries(verifyJson.verification.checks)) {
+      console.log(`  - ${name}: ${check.status.toUpperCase()}`);
+    }
+    console.log("Reasons:", verifyJson.verification.reasons);
+    console.log("Verdict ASCII Block:\n" + verifyJson.verification.formattedVerdict);
 
-    // 4. Create Tamper Demo copy via /api/events/:eventId/tamper-demo
-    console.log(`\n--- STEP 4: Create Tampered Copy for Event ${eventId} ---`);
+    // 5. Attack an isolated copy
+    console.log(`\n--- STEP 5: ATTACK ---`);
+    console.log("Modifying an isolated copy of the evidence receipt...");
     const tamperRes = await fetch(`${baseUrl}/api/events/${eventId}/tamper-demo`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,8 +97,8 @@ async function main() {
 
     const tamperId = tamperJson.tamperId;
 
-    // 5. Verify Tampered Copy via /api/verify-tampered
-    console.log(`\n--- STEP 5: Verify Tampered Copy ${tamperId} via /api/verify-tampered ---`);
+    // 6. Verify tampered copy
+    console.log(`\n--- STEP 6: VERIFY AGAIN ---`);
     const verifyTamperedRes = await fetch(`${baseUrl}/api/verify-tampered`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -114,15 +107,28 @@ async function main() {
 
     const verifyTamperedJson = await verifyTamperedRes.json();
     console.log("Verify Tampered Status:", verifyTamperedRes.status);
-    console.log("Valid (Must be false):", verifyTamperedJson.valid);
+    console.log("Tampered CooL Verification:", verifyTamperedJson.valid ? "VALID" : "INVALID");
     console.log("Tamper Detected:", verifyTamperedJson.detectionConfirmed);
-    console.log("Binding Check:  ", verifyTamperedJson.checks.binding.status);
-    console.log("Signature Check:", verifyTamperedJson.checks.signature.status);
+    console.log("Binding Check:  ", verifyTamperedJson.checks.binding.status.toUpperCase());
+    console.log("Signature Check:", verifyTamperedJson.checks.signature.status.toUpperCase());
     console.log("Reasons for failure:", verifyTamperedJson.reasons);
     console.log("Tampered ASCII Block:\n" + verifyTamperedJson.formattedVerdict);
 
-    // 6. List events for dashboard via /api/events
-    console.log("\n--- STEP 6: Get Dashboard Events via /api/events ---");
+    // 7. Detection and original integrity
+    console.log("\n--- STEP 7: DETECTION ---");
+    const originalAfterTamperRes = await fetch(`${baseUrl}/api/refund/${eventId}/verify`, {
+      method: "POST",
+    });
+    const originalAfterTamperJson = await originalAfterTamperRes.json();
+    console.log("Original:", originalAfterTamperJson.evidenceStatus?.verification);
+    console.log("Tampered:", verifyTamperedJson.valid ? "VALID" : "INVALID");
+    console.log("Failed cryptographic checks:", {
+      binding: verifyTamperedJson.checks.binding.status,
+      signature: verifyTamperedJson.checks.signature.status,
+    });
+
+    // Dashboard confirmation
+    console.log("\n--- EVIDENCE EVENT STORE ---");
     const eventsRes = await fetch(`${baseUrl}/api/events`);
     const eventsJson = await eventsRes.json();
     console.log(`Total Events in Dashboard: ${eventsJson.count}`);

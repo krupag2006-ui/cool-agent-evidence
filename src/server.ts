@@ -13,6 +13,8 @@ const server = app.listen(config.port, () => {
   console.log(`Available Endpoints:`);
   console.log(`  GET  http://localhost:${config.port}/api/health`);
   console.log(`  POST http://localhost:${config.port}/api/record`);
+  console.log(`  POST http://localhost:${config.port}/api/refund`);
+  console.log(`  POST http://localhost:${config.port}/api/refund/:eventId/verify`);
   console.log(`  POST http://localhost:${config.port}/api/verify`);
   console.log(`  GET  http://localhost:${config.port}/api/events`);
   console.log(`  GET  http://localhost:${config.port}/api/events/:eventId`);

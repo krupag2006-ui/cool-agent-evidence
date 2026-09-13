@@ -14,6 +14,8 @@ All request bodies and responses are standard JSON with `Content-Type: applicati
 |---|---|---|
 | `GET` | `/api/health` | Service health and CooL SDK readiness |
 | `POST` | `/api/record` | Record agent decision with CooL cryptographic evidence |
+| `POST` | `/api/refund` | Evaluate and record a deterministic RefundBot decision |
+| `POST` | `/api/refund/:eventId/verify` | Verify a recorded RefundBot decision |
 | `POST` | `/api/verify` | Verify stored evidence receipt offline using CooL verifier |
 | `GET` | `/api/events` | List recorded events (for dashboard) |
 | `GET` | `/api/events/:eventId` | Get full event details, metadata, and evidence receipt |
@@ -43,7 +45,133 @@ No parameters or body required.
 
 ---
 
-## 2. POST `/api/record`
+## 2. POST `/api/refund`
+
+Evaluates a refund request using RefundBot's deterministic `RefundPolicy-v1` rules, then records the consequential decision through the existing CooL integration. Refunds of `10000` or less are approved for `product_damaged`, `defective_product`, `wrong_item`, or `not_received`; all other requests are rejected.
+
+### Request Body
+```json
+{
+  "amount": 5000,
+  "reason": "product_damaged",
+  "customerId": "CUST-9821",
+  "orderId": "ORD-54321"
+}
+```
+
+### Response `201 Created`
+```json
+{
+  "success": true,
+  "decision": {
+    "decision": "REFUND_APPROVED",
+    "reason": "product_damaged",
+    "amount": 5000,
+    "customerId": "CUST-9821",
+    "orderId": "ORD-54321",
+    "policyVersion": "RefundPolicy-v1",
+    "agent": "RefundBot",
+    "agentVersion": "1.0.0",
+    "model": "RefundBot-PolicyEngine",
+    "eventType": "agent.refund_approved"
+  },
+  "eventId": "EVT-001",
+  "recordId": "01M2D2FCYBS7HBS69AGG6KXMYK",
+  "executionId": "01M2D2FCY5KWNJXKDBC31DDJC5",
+  "digest": "mh:sha256:...",
+  "timestamp": "2026-09-13T09:44:48.000Z",
+  "status": "verified",
+  "evidence": { "schema": "cool.receipt.v2" },
+  "evidenceStatus": {
+    "decision": "REFUND_APPROVED",
+    "evidence": "RECORDED",
+    "verification": "VALID",
+    "checks": {
+      "binding": { "status": "pass", "detail": "..." },
+      "signature": { "status": "pass", "detail": "..." },
+      "inclusion": { "status": "pass", "detail": "..." },
+      "witnesses": { "status": "absent", "detail": "..." },
+      "attestation": { "status": "simulated", "detail": "..." },
+      "enclave": { "status": "simulated", "detail": "..." },
+      "anchor": { "status": "absent", "detail": "..." }
+    },
+    "reasons": []
+  },
+  "verification": { "valid": true, "checks": "same structured checks as evidenceStatus", "reasons": [] }
+}
+```
+
+Rejected decisions return the same `201` shape with `decision: "REFUND_REJECTED"` and `eventType: "agent.refund_rejected"`; they are still recorded and independently verifiable for auditability.
+
+The `verification` object is the complete normalized CooL verifier result. `evidenceStatus` is a frontend-friendly summary derived from that result; clients must use the actual CooL `verification` checks rather than infer trust from the RefundBot decision.
+
+### Error Response `400 Bad Request`
+The request requires a non-negative numeric `amount`, a non-empty `reason`, `customerId`, and `orderId`.
+
+---
+
+## 3. POST `/api/refund/:eventId/verify`
+
+Verifies a RefundBot event using the existing offline CooL verifier.
+
+### Response `200 OK`
+```json
+{
+  "success": true,
+  "decision": {
+    "decision": "REFUND_APPROVED",
+    "reason": "product_damaged",
+    "amount": 5000,
+    "customerId": "CUST-9821",
+    "orderId": "ORD-54321",
+    "policyVersion": "RefundPolicy-v1",
+    "agent": "RefundBot",
+    "agentVersion": "1.0.0",
+    "model": "RefundBot-PolicyEngine",
+    "eventType": "agent.refund_approved"
+  },
+  "eventId": "EVT-001",
+  "recordId": "01M2D2FCYBS7HBS69AGG6KXMYK",
+  "digest": "mh:sha256:...",
+  "evidence": { "schema": "cool.receipt.v2" },
+  "verification": {
+    "valid": true,
+    "subject": { "kind": "evidence", "recordId": "01M2D2FCYBS7HBS69AGG6KXMYK" },
+    "checks": {
+      "binding": { "status": "pass", "detail": "..." },
+      "signature": { "status": "pass", "detail": "..." },
+      "inclusion": { "status": "pass", "detail": "..." },
+      "witnesses": { "status": "absent", "detail": "..." },
+      "attestation": { "status": "simulated", "detail": "..." },
+      "enclave": { "status": "simulated", "detail": "..." },
+      "anchor": { "status": "absent", "detail": "..." }
+    },
+    "reasons": [],
+    "formattedVerdict": "...",
+    "attestationDisclaimer": "..."
+  }
+}
+```
+
+Returns `404` when the event ID is not present in the event store.
+
+The response includes the same `evidenceStatus` summary and complete `verification` object described for `/api/refund`. A successful verification marks the event `verified` in the event store.
+
+### Frontend Evidence Contract
+
+Render the response as three distinct concepts:
+
+1. **AI decision**: use `decision.decision`, `decision.reason`, `decision.amount`, `decision.customerId`, and `decision.orderId`.
+2. **CooL evidence**: use `eventId`, `recordId`, `digest`, and the complete `evidence` receipt. `evidenceStatus.evidence` indicates that the receipt was recorded.
+3. **CooL verification**: use `verification.valid`, `verification.checks`, and `verification.reasons`. Display each check's actual `status` and `detail` for `binding`, `signature`, `inclusion`, `witnesses`, `attestation`, `enclave`, and `anchor`.
+
+Do not infer verification from `REFUND_APPROVED` or `REFUND_REJECTED`. The CooL verifier is the source of truth for whether the receipt remains valid.
+
+The local/default environment reports `attestation: simulated` and `enclave: simulated`. This reflects the CooL simulator root; it is not hardware-backed Intel TDX or Phala dstack protection.
+
+---
+
+## 4. POST `/api/record`
 
 Records an AI agent decision (such as a refund authorization) through the CooL SDK. CooL generates an immutable evidence receipt committing to the metadata and payloads using salted SHA-256 hashes and ML-DSA-65 + Ed25519 hybrid signatures.
 

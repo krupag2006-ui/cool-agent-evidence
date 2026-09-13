@@ -5,6 +5,7 @@ import { healthRouter } from "./routes/health.js";
 import { recordRouter } from "./routes/record.js";
 import { verifyRouter } from "./routes/verify.js";
 import { eventsRouter } from "./routes/events.js";
+import { refundRouter } from "./routes/refund.js";
 
 export function createApp(): Express {
   const app = express();
@@ -48,6 +49,8 @@ export function createApp(): Express {
       endpoints: [
         "GET  /api/health",
         "POST /api/record",
+        "POST /api/refund",
+        "POST /api/refund/:eventId/verify",
         "POST /api/verify",
         "GET  /api/events",
         "GET  /api/events/:eventId",
@@ -60,6 +63,7 @@ export function createApp(): Express {
   // Mount API routers
   app.use("/api/health", healthRouter);
   app.use("/api/record", recordRouter);
+  app.use("/api/refund", refundRouter);
   app.use("/api/verify", verifyRouter);
   // Also mount verify-tampered directly at /api/verify-tampered
   app.use("/api/verify-tampered", (req, res, next) => {

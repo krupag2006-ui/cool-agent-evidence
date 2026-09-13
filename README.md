@@ -6,35 +6,37 @@
 [![Node](https://img.shields.io/badge/Node-%3E%3D20-green.svg)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-lightgrey.svg)](LICENSE)
 
----
 
 ## The Problem
 
 Autonomous AI agents increasingly make consequential real-world decisions: approving financial refunds, validating insurance claims, adjusting credit lines, and executing sensitive trades. 
 
 When disputes or regulatory audits occur weeks or months later, organizations must answer critical questions:
-- **What exact code, model, and policy version ran?**
-- **What inputs led to this decision?**
-- **Was the audit trail modified or deleted after the fact?**
-- **Can an external third party verify the proof without trusting our internal database?**
 
 Traditional solutions rely on ordinary application logs stored in centralized databases (PostgreSQL, Elasticsearch, CloudWatch). These logs have severe limitations:
 1. **Malleability**: Anyone with database access or cloud admin credentials can alter or delete rows.
 2. **Implicit Trust**: Auditors must unconditionally trust the company hosting the logs.
 3. **Lack of Cryptographic Lineage**: Standard logs do not cryptographically bind software identity, policy versions, and execution records.
 
----
 
 ## The Solution: CooL Evidence
 
 **CooL Evidence** integrates the official [CooL SDK (`cool-nwc`)](https://github.com/Northwind-Cipher/cool-sdk) into an AI Agent workflow (demonstrated via an AI Refund Agent).
 
 Instead of storing unverified text logs, the agent generates a **self-contained, cryptographically sealed evidence receipt** for every decision. The receipt binds the agent's identity, policy version, and salted payload commitments using:
-- **Post-Quantum Hybrid Signatures**: ML-DSA-65 (NIST FIPS 204) + Ed25519.
-- **RFC 6962 Transparency Log**: Merkle tree inclusion proofs with signed tree heads.
-- **Offline Independent Verification**: Anyone holding the receipt can verify it anywhere without network access or database credentials.
+- **Post-Quantum Hybrid Signatures**: ML-DSA-65 + Ed25519.
+- **RFC 6962 Transparency Log**: Merkle inclusion proofs with signed tree heads.
+- **Offline Verification**: A receipt can be checked independently of the event store.
 
----
+## How The Product Works
+
+1. RefundBot evaluates a request using deterministic `RefundPolicy-v1` rules.
+2. The decision goes through `coolService.recordDecision()` and the real `cool-nwc` SDK.
+3. CooL returns a `cool.receipt.v2` receipt with an event ID, record ID, execution ID, digest, and evidence.
+4. The receipt is stored and checked with `coolService.verify()`.
+5. The verifier returns actual binding, signature, inclusion, witnesses, attestation, enclave, and anchor statuses.
+6. The tamper demo verifies an isolated modified copy; the original receipt remains unchanged and valid.
+
 
 ## Architecture Flow
 
@@ -64,7 +66,6 @@ Instead of storing unverified text logs, the agent generates a **self-contained,
 [ Structured Verdict: 7 Domains (Binding, Signature, Inclusion...) ]
 ```
 
----
 
 ## Why CooL Matters
 
@@ -77,7 +78,6 @@ Instead of storing unverified text logs, the agent generates a **self-contained,
 | **Quantum Resistance** | ❌ None | ✅ Hybrid ML-DSA-65 post-quantum cryptography |
 | **Transparency Log** | ❌ None | ✅ RFC 6962 append-only Merkle tree inclusion proofs |
 
----
 
 ## Actual CooL SDK Integration
 
@@ -122,17 +122,13 @@ console.log(verdict.ok); // true
 console.log(formatVerdict(verdict)); // ASCII verification block
 ```
 
----
 
 ## Cryptographic Privacy & Security
 
 In compliance with CooL's architecture:
-- Sensitive inputs and outputs are never stored as plaintext in the evidence receipt.
-- Each payload is committed as a salted multihash: `mh:sha256(salt || bytes)`.
-- Salts are retained alongside the commitment so that an authorized auditor can later reveal the original document and mathematically prove it matches the receipt.
-- Private signing keys are managed inside the CooL runtime enclave/simulator and are never exposed to application logs or client responses.
+- Sensitive payloads are represented in the receipt through salted commitments.
+- Private signing keys remain inside the CooL runtime and are not returned by the API.
 
----
 
 ## Structured Verification Domains
 
@@ -150,27 +146,26 @@ Verification produces a structured verdict across **7 independent trust domains*
 > **Simulated Attestation Notice**:
 > In local and cloud node environments without physical Confidential Computing hardware (Intel TDX or Phala dstack), the CooL SDK uses its built-in simulator root. The verifier accurately labels attestation and enclave checks as **`simulated`**. This prototype honestly reports simulated attestation and does **not** claim hardware-backed guarantees.
 
----
 
 ## API Summary
 
 Detailed endpoint documentation and schemas are available in [docs/API.md](docs/API.md).
 
-- `GET  /api/health` — Service readiness and SDK status.
-- `POST /api/record` — Records agent decision, stores event, returns CooL receipt.
-- `POST /api/verify` — Verifies stored receipt offline with CooL verifier.
-- `GET  /api/events` — Lists recent recorded decisions for frontend dashboard.
-- `GET  /api/events/:eventId` — Fetches full event details and complete evidence receipt.
-- `POST /api/events/:eventId/tamper-demo` — Creates safe, isolated tampered copy for demo.
-- `POST /api/verify-tampered` — Verifies tampered copy and demonstrates cryptographic rejection.
+- `GET /api/health` - Service readiness and SDK status.
+- `POST /api/refund` - Evaluate and record a deterministic RefundBot decision.
+- `POST /api/refund/:eventId/verify` - Verify a recorded RefundBot event.
+- `POST /api/record` - Record a general agent decision through CooL.
+- `POST /api/verify` - Verify a stored receipt offline.
+- `GET /api/events` and `GET /api/events/:eventId` - List or inspect events.
+- `POST /api/events/:eventId/tamper-demo` - Create an isolated tampered copy.
+- `POST /api/verify-tampered` - Verify the tampered copy with CooL.
 
----
 
 ## Getting Started
 
 ### Prerequisites
-- Node.js `>= 20.0.0`
-- npm `>= 10.0.0`
+- Node.js `>=20.0.0`
+- npm `>=10.0.0`
 
 ### Installation
 ```bash
@@ -204,14 +199,40 @@ npm start
 
 ### Running Tests
 ```bash
-# Run full automated test suite (10 test cases covering all endpoints)
+# Run the automated API and CooL evidence test suite
 npm test
 
 # Run direct CooL SDK verification spike
 npm run test:cool
 ```
 
----
+## Technologies Used
+
+- Node.js and strict TypeScript
+- Express and Zod validation
+- Official `cool-nwc` 3.x SDK
+- JSON event store for the local prototype
+- `tsx` for development, tests, and the E2E demo
+
+## Technical Decisions
+
+- RefundBot is deterministic and explainable; it does not call an external LLM or API.
+- CooL recording and verification remain owned by the existing `coolService`.
+- Rejected decisions are recorded for auditability.
+- Tampering always uses a deep-copied receipt and never mutates the original event.
+- Frontends must use CooL verification results, not infer trust from the RefundBot decision.
+
+## Limitations
+
+Local Node.js runs report `attestation: simulated` and `enclave: simulated` using the CooL simulator root. This prototype does not claim hardware-backed Intel TDX or Phala dstack protection. Witnesses and public anchoring may also report `absent` in the local demo.
+
+## Future Improvements
+
+- Add durable production storage and retention controls.
+- Configure real witness nodes and public anchoring.
+- Run in a hardware-backed confidential-computing environment.
+- Add other consequential agent workflows on the same CooL evidence layer.
+
 
 ## Demonstration: Detecting Tampered Receipts
 
