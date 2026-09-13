@@ -13,7 +13,8 @@ function formatAmount(amount: number) {
 function getTrustSummary(events: EventSummary[]) {
   const verifiedCount = events.filter((event) => event.status === "verified").length;
   const tamperedCount = events.filter((event) => event.status === "tampered_detected").length;
-  return { total: events.length, verified: verifiedCount, tampered: tamperedCount };
+  const latestTimestamp = events.reduce((latest, event) => event.timestamp > latest ? event.timestamp : latest, "");
+  return { total: events.length, verified: verifiedCount, tampered: tamperedCount, latestTimestamp };
 }
 
 function formatDate(value?: string) {
@@ -204,7 +205,7 @@ export function App() {
       <main className="content">
         <div className="page-heading">
           <div><span className="eyebrow">AI action audit console</span><h1>{pageTitle}</h1></div>
-          <div className="heading-note"><span className="line" /> Every RefundBot action gets a CooL receipt.</div>
+          <div className="heading-note"><span className="line" /> Every consequential agent action gets independently verifiable evidence.</div>
         </div>
         {error && <div className="error" role="alert"><strong>Something needs attention.</strong> {error}<button onClick={() => setError("")} aria-label="Dismiss error">×</button></div>}
 
@@ -227,12 +228,13 @@ function Dashboard({ events, loading, onNew, onOpen }: Readonly<{ events: EventS
   const visibleEvents = [...events].slice(0, 4);
   return <>
     <section className="hero-grid">
-      <div className="hero-copy"><div className="kicker">01 / Evidence overview</div><h2>When an agent acts, <em>trust the receipt.</em></h2><p>CooL independently verifies the evidence rather than trusting the RefundBot decision alone. Each recorded action is bound to a receipt, inspected by proof, and challengeable on demand.</p><button className="primary" onClick={onNew}>RUN REFUNDBOT & CREATE EVIDENCE →</button></div>
-      <div className="signal-card"><div className="signal-top"><span>TRUST SIGNAL</span><span className="live">● LIVE</span></div><div className="ring"><span>{summary.total}</span><small>recorded<br />events</small></div><div className="summary-string">{summaryText}</div><div className="signal-foot"><span>Evidence layer</span><strong>CooL / v3.0.0</strong></div></div>
+      <div className="hero-copy"><div className="kicker">01 / Evidence overview</div><h2>When an agent acts, <em>trust the receipt.</em></h2><p>RefundBot makes the decision. CooL makes it independently verifiable. The same evidence layer can audit refunds, claims, approvals, and other consequential agent actions.</p><button className="primary" onClick={onNew}>RUN REFUNDBOT & CREATE EVIDENCE →</button></div>
+      <div className="signal-card"><div className="signal-top"><span>TRUST SIGNAL</span><span className="live">● LIVE</span></div><div className="ring"><span>{summary.total}</span><small>recorded<br />events</small></div><div className="summary-string">{summaryText}</div><div className="signal-foot"><span>Latest evidence</span><strong>{summary.latestTimestamp ? formatDate(summary.latestTimestamp) : "Awaiting first record"}</strong></div></div>
     </section>
-    <section className="section-block"><div className="section-title"><div><span className="eyebrow">Event history</span><h2>Recent agent actions</h2></div><span className="count">{summary.total.toString().padStart(2, "0")} EVENTS</span></div>
+    <section className="section-block"><div className="section-title"><div><span className="eyebrow">Evidence timeline</span><h2>Every action leaves a receipt</h2><p className="section-description">Chronological agent actions sourced from the live event store. Select one to inspect its evidence.</p></div><span className="count">{summary.total.toString().padStart(2, "0")} EVENTS</span></div>
       {loading === "loading-events" ? <div className="empty"><span className="loader" />Loading recorded evidence...</div> : events.length === 0 ? <div className="empty"><strong>No evidence recorded yet.</strong><p>Run a refund decision to create the first CooL receipt.</p><button type="button" className="secondary" onClick={onNew}>Record first decision</button></div> : <div className="event-table"><div className="table-head"><span>EVENT</span><span>DECISION</span><span>AMOUNT</span><span>STATUS</span><span>WHEN</span></div>{visibleEvents.map((event) => <button type="button" className="event-row" key={event.eventId} onClick={() => onOpen(event.eventId)}><span><strong>{event.eventId}</strong><small>{event.agent} · {event.reason}</small></span><span className={isApproved(event.decision) ? "approved" : "rejected"}>{event.decision.replace("REFUND_", "")}</span><span>{formatAmount(event.amount)}</span><span><i className="mini-dot" />{event.status}</span><span>{formatDate(event.timestamp)}</span></button>)}</div>}
     </section>
+    {events.length > 0 && <div className="flow-strip dashboard-flow"><span>CREATE DECISION</span><b>→</b><span>EVIDENCE CREATED</span><b>→</b><span>VERIFY ORIGINAL</span><b>→</b><span className="flow-valid">VALID</span><b>→</b><span>SIMULATE TAMPERING</span><b>→</b><span className="flow-invalid">INVALID</span></div>}
   </>;
 }
 

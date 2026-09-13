@@ -233,7 +233,14 @@ npm run test:cool
 
 ## Limitations
 
-Local Node.js runs report `attestation: simulated` and `enclave: simulated` using the CooL simulator root. This prototype does not claim hardware-backed Intel TDX or Phala dstack protection. Witnesses and public anchoring may also report `absent` in the local demo.
+This prototype is intentionally small and transparent about its production boundary:
+
+- JSON file storage in `data/events.json` should be replaced with durable database and object storage in production.
+- Local Node.js runs report `attestation: simulated` and `enclave: simulated` using the CooL simulator root; hardware-backed Intel TDX or Phala dstack requires real TEE configuration.
+- RefundBot currently uses deterministic `RefundPolicy-v1` demo rules rather than an external LLM.
+- Production deployment could add durable persistence, hardware-backed attestation, real witness nodes, and public anchoring.
+
+Witnesses and public anchoring may also report `absent` in the local demo.
 
 ## Future Improvements
 
