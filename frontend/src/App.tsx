@@ -7,7 +7,13 @@ type ReceiptData = RefundResponse | EventDetail;
 const checkNames = ["binding", "signature", "inclusion", "witnesses", "attestation", "enclave", "anchor"];
 
 function formatAmount(amount: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount / 100);
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function getTrustSummary(events: EventSummary[]) {
+  const verifiedCount = events.filter((event) => event.status === "verified").length;
+  const tamperedCount = events.filter((event) => event.status === "tampered_detected").length;
+  return { total: events.length, verified: verifiedCount, tampered: tamperedCount };
 }
 
 function formatDate(value?: string) {
@@ -109,7 +115,7 @@ export function App() {
     event.preventDefault();
     const amount = Number(form.amount);
     if (!form.customerId.trim() || !form.orderId.trim() || !form.reason.trim() || !Number.isFinite(amount) || amount < 0) {
-      setError("Enter a customer ID, order ID, reason, and a non-negative amount in cents.");
+      setError("Enter a customer ID, order ID, reason, and a non-negative amount.");
       return;
     }
     setError("");
@@ -209,25 +215,29 @@ export function App() {
         {view === "verify" && receipt && <VerificationView receipt={receipt} verification={verification} tampered={tampered} displayedVerification={displayedVerification} onVerify={verifyReceipt} onTamper={runTamperDemo} loading={loading} />}
         {!receipt && (view === "receipt" || view === "verify") && <EmptyState onNew={() => nav("refund")} />}
 
-        {receipt && view !== "dashboard" && view !== "refund" && <div className="flow-strip"><span>AI ACTION</span><b>→</b><span>COOL EVIDENCE RECORDED</span><b>→</b><span>CRYPTOGRAPHIC PROOF AVAILABLE</span></div>}
+        {receipt && view !== "dashboard" && view !== "refund" && <div className="flow-strip"><span>RefundBot</span><b>↓</b><span>CooL Evidence Created</span><b>↓</b><span>CooL Verification</span><b>↓</b><span>VALID</span><b>↓</b><span>Tamper Evidence</span><b>↓</b><span>INVALID</span></div>}
       </main>
     </div>
   );
 }
 
 function Dashboard({ events, loading, onNew, onOpen }: Readonly<{ events: EventSummary[]; loading: string; onNew: () => void; onOpen: (id: string) => void }>) {
+  const summary = getTrustSummary(events);
+  const summaryText = `${summary.total} Events | ${summary.verified} Verified | ${summary.tampered} Tampered`;
+  const visibleEvents = [...events].slice(0, 4);
   return <>
     <section className="hero-grid">
-      <div className="hero-copy"><div className="kicker">01 / Evidence overview</div><h2>When an agent acts, <em>trust the receipt.</em></h2><p>CooL binds the RefundBot decision to cryptographic evidence you can verify offline, inspect by domain, and challenge on demand.</p><button className="primary" onClick={onNew}>Start refund review <span>↗</span></button></div>
-      <div className="signal-card"><div className="signal-top"><span>TRUST SIGNAL</span><span className="live">● LIVE</span></div><div className="ring"><span>{events.length}</span><small>recorded<br />events</small></div><div className="signal-foot"><span>Evidence layer</span><strong>CooL / v3.0.0</strong></div></div>
+      <div className="hero-copy"><div className="kicker">01 / Evidence overview</div><h2>When an agent acts, <em>trust the receipt.</em></h2><p>CooL independently verifies the evidence rather than trusting the RefundBot decision alone. Each recorded action is bound to a receipt, inspected by proof, and challengeable on demand.</p><button className="primary" onClick={onNew}>RUN REFUNDBOT & CREATE EVIDENCE →</button></div>
+      <div className="signal-card"><div className="signal-top"><span>TRUST SIGNAL</span><span className="live">● LIVE</span></div><div className="ring"><span>{summary.total}</span><small>recorded<br />events</small></div><div className="summary-string">{summaryText}</div><div className="signal-foot"><span>Evidence layer</span><strong>CooL / v3.0.0</strong></div></div>
     </section>
-    <section className="section-block"><div className="section-title"><div><span className="eyebrow">Event history</span><h2>Recent agent actions</h2></div><span className="count">{events.length.toString().padStart(2, "0")} EVENTS</span></div>
-      {loading === "loading-events" ? <div className="empty"><span className="loader" />Loading recorded evidence...</div> : events.length === 0 ? <div className="empty"><strong>No evidence recorded yet.</strong><p>Run a refund decision to create the first CooL receipt.</p><button type="button" className="secondary" onClick={onNew}>Record first decision</button></div> : <div className="event-table"><div className="table-head"><span>EVENT</span><span>DECISION</span><span>AMOUNT</span><span>STATUS</span><span>WHEN</span></div>{events.map((event) => <button type="button" className="event-row" key={event.eventId} onClick={() => onOpen(event.eventId)}><span><strong>{event.eventId}</strong><small>{event.agent} · {event.reason}</small></span><span className={isApproved(event.decision) ? "approved" : "rejected"}>{event.decision.replace("REFUND_", "")}</span><span>{formatAmount(event.amount)}</span><span><i className="mini-dot" />{event.status}</span><span>{formatDate(event.timestamp)}</span></button>)}</div>}
+    <section className="section-block"><div className="section-title"><div><span className="eyebrow">Event history</span><h2>Recent agent actions</h2></div><span className="count">{summary.total.toString().padStart(2, "0")} EVENTS</span></div>
+      {loading === "loading-events" ? <div className="empty"><span className="loader" />Loading recorded evidence...</div> : events.length === 0 ? <div className="empty"><strong>No evidence recorded yet.</strong><p>Run a refund decision to create the first CooL receipt.</p><button type="button" className="secondary" onClick={onNew}>Record first decision</button></div> : <div className="event-table"><div className="table-head"><span>EVENT</span><span>DECISION</span><span>AMOUNT</span><span>STATUS</span><span>WHEN</span></div>{visibleEvents.map((event) => <button type="button" className="event-row" key={event.eventId} onClick={() => onOpen(event.eventId)}><span><strong>{event.eventId}</strong><small>{event.agent} · {event.reason}</small></span><span className={isApproved(event.decision) ? "approved" : "rejected"}>{event.decision.replace("REFUND_", "")}</span><span>{formatAmount(event.amount)}</span><span><i className="mini-dot" />{event.status}</span><span>{formatDate(event.timestamp)}</span></button>)}</div>}
     </section>
   </>;
 }
 
 function EvidenceLab({ events, loading, onOpen, onRefresh }: Readonly<{ events: EventSummary[]; loading: string; onOpen: (id: string) => void; onRefresh: () => void }>) {
+  const visibleEvents = [...events].slice(0, 6);
   return (
     <section className="section-block">
       <div className="section-title">
@@ -240,13 +250,13 @@ function EvidenceLab({ events, loading, onOpen, onRefresh }: Readonly<{ events: 
           {loading === "loading-events" ? "Refreshing..." : "Refresh events"}
         </button>
       </div>
-      {loading === "loading-events" ? <div className="empty"><span className="loader" />Loading recorded evidence...</div> : events.length === 0 ? <div className="empty"><strong>No recorded evidence yet.</strong><p>Submit a refund request first, then return here to inspect its receipt.</p></div> : <div className="event-table"><div className="table-head"><span>EVENT</span><span>DECISION</span><span>AMOUNT</span><span>STATUS</span><span>WHEN</span></div>{events.map((event) => <button type="button" className="event-row" key={event.eventId} onClick={() => onOpen(event.eventId)}><span><strong>{event.eventId}</strong><small>{event.agent} · {event.reason}</small></span><span className={isApproved(event.decision) ? "approved" : "rejected"}>{event.decision.replace("REFUND_", "")}</span><span>{formatAmount(event.amount)}</span><span><i className="mini-dot" />{event.status}</span><span>{formatDate(event.timestamp)}</span></button>)}</div>}
+      {loading === "loading-events" ? <div className="empty"><span className="loader" />Loading recorded evidence...</div> : events.length === 0 ? <div className="empty"><strong>No recorded evidence yet.</strong><p>Submit a refund request first, then return here to inspect its receipt.</p></div> : <div className="event-table"><div className="table-head"><span>EVENT</span><span>DECISION</span><span>AMOUNT</span><span>STATUS</span><span>WHEN</span></div>{visibleEvents.map((event) => <button type="button" className="event-row" key={event.eventId} onClick={() => onOpen(event.eventId)}><span><strong>{event.eventId}</strong><small>{event.agent} · {event.reason}</small></span><span className={isApproved(event.decision) ? "approved" : "rejected"}>{event.decision.replace("REFUND_", "")}</span><span>{formatAmount(event.amount)}</span><span><i className="mini-dot" />{event.status}</span><span>{formatDate(event.timestamp)}</span></button>)}</div>}
     </section>
   );
 }
 
 function RefundForm({ form, setForm, onSubmit, loading }: Readonly<{ form: { customerId: string; orderId: string; amount: string; reason: string }; setForm: (value: { customerId: string; orderId: string; amount: string; reason: string }) => void; onSubmit: (event: FormEvent) => void; loading: boolean }>) {
-  return <section className="form-layout"><div className="form-intro"><span className="kicker">02 / RefundBot input</span><h2>Give the agent a real decision to make.</h2><p>RefundBot evaluates the request with <strong>RefundPolicy-v1</strong>, then CooL records both the outcome and its proof.</p><div className="policy-note"><span>POLICY</span><strong>RefundPolicy-v1</strong><small>Eligible reasons under $100.00 are approved. Every decision is recorded, including rejections.</small></div></div><form className="panel form-panel" onSubmit={onSubmit}><div className="panel-heading"><span className="eyebrow">Refund request</span><span className="required">All fields required</span></div><label>Customer ID<input value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} placeholder="CUST-9821" /></label><label>Order ID<input value={form.orderId} onChange={(e) => setForm({ ...form, orderId: e.target.value })} placeholder="ORD-54321" /></label><div className="two-col"><label>Amount <small>in cents</small><input type="number" min="0" step="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></label><label>Reason<select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}><option value="product_damaged">Product damaged</option><option value="defective_product">Defective product</option><option value="wrong_item">Wrong item</option><option value="not_received">Not received</option><option value="customer_changed_mind">Customer changed mind</option></select></label></div><button type="submit" className="primary full" disabled={loading}>{loading ? <><span className="button-loader" />Recording with CooL...</> : <>Ask RefundBot to decide <span>→</span></>}</button><p className="form-foot">Your request is sent to the existing RefundBot API. No decision is mocked in this console.</p></form></section>;
+  return <section className="form-layout"><div className="form-intro"><span className="kicker">02 / RefundBot input</span><h2>Give the agent a real decision to make.</h2><p>RefundBot evaluates the request with <strong>RefundPolicy-v1</strong>, then CooL records both the outcome and its proof.</p><div className="policy-note"><span>POLICY</span><strong>RefundPolicy-v1</strong><small>Eligible reasons under ₹100 are approved. Every decision is recorded, including rejections.</small></div></div><form className="panel form-panel" onSubmit={onSubmit}><div className="panel-heading"><span className="eyebrow">Refund request</span><span className="required">All fields required</span></div><label>Customer ID<input value={form.customerId} onChange={(e) => setForm({ ...form, customerId: e.target.value })} placeholder="CUST-9821" /></label><label>Order ID<input value={form.orderId} onChange={(e) => setForm({ ...form, orderId: e.target.value })} placeholder="ORD-54321" /></label><div className="two-col"><label>Amount<input type="number" min="0" step="1" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></label><label>Reason<select value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}><option value="product_damaged">Product damaged</option><option value="defective_product">Defective product</option><option value="wrong_item">Wrong item</option><option value="not_received">Not received</option><option value="customer_changed_mind">Customer changed mind</option></select></label></div><button type="submit" className="primary full" disabled={loading}>{loading ? <><span className="button-loader" />Recording with CooL...</> : <>RUN REFUNDBOT & CREATE EVIDENCE →</>}</button><p className="form-foot">Your request is sent to the existing RefundBot API. No decision is mocked in this console.</p></form></section>;
 }
 
 function Receipt({ receipt, verification, onVerify, onTamper, loading, onBack }: { receipt: ReceiptData; verification?: Verification; onVerify: () => void; onTamper: () => void; loading: string; onBack: () => void }) {
